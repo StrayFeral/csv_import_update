@@ -4,6 +4,8 @@ csv_import_update.py README
 Evgueni.Antonov@gmail.com
 Written in Python 3.5.3
 
+https://github.com/StrayFeral/csv_import_update
+
 This python script is a quick n dirty tool for import/update of a CSV
 file into a database. It is a fully generic tool.
 
