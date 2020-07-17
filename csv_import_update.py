@@ -46,6 +46,8 @@ debug
     Enables DEBUG MODE and VERBOSE MODE - more messages on screen and
     UPDATE and INSERT queries will not be executed.
 
+Quick n dirty CSV importer.
+
 This script will read a CSV file line by line and will do either
 INSERT or UPDATE or nothing at all to a database. The database name,
 type, table and other things are specified in an INI file with the
@@ -152,19 +154,23 @@ def read_csv_file(conf, fn):
     qchar                       = conf["csv"]["quotechar"]
     sql_get_next_id             = get_next_id_query(conf)
     
+    rowcnt                      = 0
+    inscnt                      = 0
+    updcnt                      = 0
+    skipcnt                     = 0
+    
     # with open('eggs.csv', newline='') as csvfile:
     with open(fn) as fh:
         reader                  = csv.reader(fh, delimiter=dchar, quotechar=qchar)
         
-        linecnt                 = 0
         for csvrow in reader:
-            linecnt             = linecnt + 1
+            rowcnt              = rowcnt + 1
             increment_column_val= None
             
-            debug_print("csv {0}> {1}".format(linecnt, csvrow))
+            debug_print("csv {0}> {1}".format(rowcnt, csvrow))
             
             if (len(conf["csv2db_fields_map"].keys()) != len(csvrow)):
-                raise Exception("CSV Line: {0}; Number of fields mismatch. Expected {1}, got {2}. Invalid CSV file.".format(linecnt, len(conf["csv2db_fields_map"].keys()), len(csvrow)))
+                raise Exception("CSV Line: {0}; Number of fields mismatch. Expected {1}, got {2}. Invalid CSV file.".format(rowcnt, len(conf["csv2db_fields_map"].keys()), len(csvrow)))
             
             row                 = []
             for col in csvrow:
@@ -201,7 +207,8 @@ def read_csv_file(conf, fn):
                     debug_print(">>>> compare: (db){0} != {1}(csv)".format(dbrowdict[colname], csvrowdict[csvcolname]))
                     if (dbrowdict[colname] != csvrowdict[csvcolname]):
                         sql     = get_update_query(conf, csvrow)
-                        print("[{0}] updating: {1}".format(linecnt, csvrowdict))
+                        print("[{0}] updating: {1}".format(rowcnt, csvrowdict))
+                        updcnt  = updcnt + 1
                         break
             
             if (total_records == 0):
@@ -210,7 +217,8 @@ def read_csv_file(conf, fn):
                 increment_column_val = singlerow[0] # Single value
                 debug_print("next id: {0}".format(increment_column_val))
                 sql             = get_insert_query(conf, csvrow, increment_column_val)
-                print("[{0}] inserting: {1}".format(linecnt, csvrowdict))
+                print("[{0}] inserting: {1}".format(rowcnt, csvrowdict))
+                inscnt          = inscnt + 1
             
             
             # If anything to do (values exist and differ)
@@ -220,9 +228,14 @@ def read_csv_file(conf, fn):
                     cursor.execute(sql)
                     connection.commit()
                 else:
-                    print("[{0}] skipping: {1}".format(linecnt, csvrowdict))
+                    print("[{0}] skipping: {1}".format(rowcnt, csvrowdict))
+                    skipcnt     = skipcnt + 1
             else:
                 debug_print("SQL query not executed, because of DEBUG_MODE being enabled.")
+    
+    print()
+    print()
+    print("[SUMMARY] total:{0}, inserts:{1}, updates:{2}, skips:{3}".format(rowcnt, inscnt, updcnt, skipcnt))
  
 
 def check_prerequisites():
