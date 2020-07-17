@@ -155,6 +155,11 @@ values are lists too.
 [get_database_data]
 columns_list                    = first_name_varchar,last_name_varchar,account_number,city_varchar
 keys_list                       = first_name,last_name,city
+null_equals_to_empty            = yes
+
+"null_equals_to_empty" is not mandatory, but if present and set to "yes"
+will enforce when comparing varchar values from CSV and database, if in
+database the value is NULL to be interpreted as empty string.
 
 This section defines what data we are looking from the database table.
 

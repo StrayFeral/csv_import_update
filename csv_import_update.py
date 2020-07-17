@@ -204,8 +204,21 @@ def read_csv_file(conf, fn):
                 
                 for colname in list(conf["update"]["columns_list"]):
                     csvcolname  = conf["db2csv_fields_map"][colname]
-                    debug_print(">>>> compare: (db){0} != {1}(csv)".format(dbrowdict[colname], csvrowdict[csvcolname]))
-                    if (dbrowdict[colname] != csvrowdict[csvcolname]):
+                    dbval       = dbrowdict[colname]
+                    csvval      = csvrowdict[csvcolname]
+                    valtype     = conf["column_types"][colname]
+                    
+                    # Special situation - if value type is not varchar,
+                    # then if we get empty value in the CSV, it should be
+                    # interpreted as NULL
+                    if (valtype == "other" and csvval == ''):
+                        csvval  = None
+                    
+                    if ("null_equals_to_empty" in conf["select"] and valtype == "varchar" and dbval == None):
+                        dbval   = ''
+                    
+                    debug_print(">>>> compare: (db)'{0}' != '{1}'(csv)".format(dbval, csvval))
+                    if (dbval != csvval):
                         sql     = get_update_query(conf, csvrow)
                         print("[{0}] updating: {1}".format(rowcnt, csvrowdict))
                         updcnt  = updcnt + 1
@@ -361,9 +374,6 @@ def set_column_types(conf):
 def format_value(conf, col, val):
     if (conf["column_types"][col] == "varchar"):
         val                     = "'{0}'".format(val.strip())
-    else:
-        if (val == None or val == ""):
-            val                 = "NULL"
     return val
 
 
@@ -472,6 +482,7 @@ def get_csv_row_dict(conf, csvrow):
         results[column_list[i]] = csvrow[i]
     
     return results
+
 
 
 
