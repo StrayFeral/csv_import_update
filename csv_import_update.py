@@ -361,6 +361,9 @@ def set_column_types(conf):
 def format_value(conf, col, val):
     if (conf["column_types"][col] == "varchar"):
         val                     = "'{0}'".format(val.strip())
+    else:
+        if (val == None or val == ""):
+            val                 = "NULL"
     return val
 
 
