@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 # This script is Python 3 specific
-# 2020-07-17
+# 2020-07-20
 # Evgueni.Antonov@gmail.com
 
 import re
@@ -85,6 +85,9 @@ connection                      = None
 debug_mode                      = False
 verbose_mode                    = False
 
+application_issues_list         = {}
+csv_file_issue                  = "csv"
+
 pp                              = pprint.PrettyPrinter(indent=4)
 
 
@@ -96,6 +99,33 @@ def debug_print(s):
             print()
         else:
             print("DEBUG: {0}".format(s))
+
+
+def add_application_issue(category, issuemsg):
+    if (category not in application_issues_list):
+        application_issues_list[category] = []
+    
+    application_issues_list[category].append("[{0}]{1}".format(category, issuemsg))
+
+
+def get_all_application_issues():
+    issues                      = []
+    for cat in application_issues_list:
+        issues                  = issues + application_issues_list[cat]
+    
+    return issues
+
+
+def print_all_application_issues():
+    issues                      = get_all_application_issues()
+    
+    if (len(issues) > 0):
+        print()
+        print("LIST OF ALL APPLICATION ISSUES")
+        print("------------------------------")
+    
+    for imsg in issues:
+        print(imsg)
 
 
 def get_database_connection(conf):
@@ -150,6 +180,7 @@ def get_ini_section(sdict):
 
 
 def read_csv_file(conf, fn):
+    global application_issues_list
     dchar                       = conf["csv"]["delimiter"]
     qchar                       = conf["csv"]["quotechar"]
     sql_get_next_id             = get_next_id_query(conf)
@@ -165,6 +196,7 @@ def read_csv_file(conf, fn):
         
         for csvrow in reader:
             rowcnt              = rowcnt + 1
+            conf["current_csv_line"] = rowcnt
             increment_column_val= None
             
             debug_print("csv {0}> {1}".format(rowcnt, csvrow))
@@ -180,6 +212,11 @@ def read_csv_file(conf, fn):
             csvrowdict          = get_csv_row_dict(conf, csvrow)
             sql_select          = get_select_query(conf, csvrow)
             sql                 = ""
+            
+            if (sql_select == ""):
+                #skipcnt         = skipcnt + 1
+                #continue ### Nah, this is not a minor exception, so we will crash
+                raise Exception("CSV Line: {0}; Blank value for a key column. All values for key columns must not be blank. Invalid CSV file.".format(rowcnt))
             
             debug_print("EXECUTING: {0}".format(sql_select))
             
@@ -378,13 +415,21 @@ def format_value(conf, col, val):
 
 
 def get_predicate(conf, csvdata):
+    global application_issues_list
     i                           = 0
     predicate                   = ""
+    rowcnt                      = conf["current_csv_line"]
     
     for column in conf["select"]["keys_list"]:
         csvcol                  = conf["db2csv_fields_map"][column]
         csvcol_index            = conf["index_map"][csvcol]
         val                     = csvdata[csvcol_index]
+        
+        # Key columns cannot be empty
+        if (val == None or val == ""):
+            add_application_issue(csv_file_issue, "[Ln:{0}][Col:{1}] Empty value for key column '{2}'.".format(rowcnt, csvcol_index, csvcol))
+            continue
+        
         val                     = format_value(conf, column, val)
         i                       = i + 1
         
@@ -399,7 +444,11 @@ def get_predicate(conf, csvdata):
 def get_select_query(conf, csvdata):
     db                          = conf["db"]["type"]
     column_list                 = conf["column_types"].keys()
-    predicate                   = get_predicate(conf, csvdata) 
+    predicate                   = get_predicate(conf, csvdata)
+    
+    if (predicate == ""):
+        return ""
+    
     sql                         = "select {0} from {1} where {2};".format(', '.join(column_list), conf["db"][db]["table"], predicate)
     
     if "select" in conf["select"]:
@@ -412,6 +461,9 @@ def get_update_query(conf, csvdata):
     db                          = conf["db"]["type"]
     column_list                 = conf["update"]["columns_list"]
     predicate                   = get_predicate(conf, csvdata)
+    
+    if (predicate == ""):
+        return ""
         
     i                           = 0
     set_clause                  = ""
@@ -445,6 +497,9 @@ def get_insert_query(conf, csvdata, nextid=None):
     db                          = conf["db"]["type"]
     column_list                 = list(conf["db2csv_fields_map"].keys())
     predicate                   = get_predicate(conf, csvdata)
+    
+    if (predicate == ""):
+        return ""
         
     values                      = []
     for column in column_list:
@@ -490,7 +545,7 @@ def get_csv_row_dict(conf, csvrow):
 # ========================================================== MAIN BEGIN
 try:
     print()
-    print("***CSV IMPORT-UPDATE TOOL***   2020-07-17 Evgueni.Antonov@gmail.com")
+    print("***CSV IMPORT-UPDATE TOOL***   2020-07-20 Evgueni.Antonov@gmail.com")
     print()
     
     check_prerequisites()
@@ -547,6 +602,8 @@ try:
     cursor.close()
     connection.close()
     
+    print_all_application_issues()
+    
     print()
     print("Application end.")
 
@@ -556,8 +613,8 @@ except Exception as e:
     fname                       = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
     
     print()
-    print("--------------------")
-    sys.exit("Exception: {0} ({1}); Code line: {2};".format(e, exc_type, exc_tb.tb_lineno))
+    print("--------------------[ EXCEPTION")
+    sys.exit("{0} ({1}); Code line: {2};".format(e, exc_type, exc_tb.tb_lineno))
 
 finally:
     # Release the connection
