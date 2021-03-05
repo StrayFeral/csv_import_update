@@ -12,17 +12,21 @@ file into a database. It is a fully generic tool.
 The intention is that this script could be used by developers, but also
 by any beginner user, so this README file is written for users of all levels.
 
-USAGE: csv_import_update.py [path]<FILENAME>[.csv] [debug|verbose]
+USAGE: csv_import_update.py [path]<FILENAME>[.csv] [debug|verbose|diff]
 
 EXAMPLE:
     ./csv_import_update.py ./mycsv.csv verbose
     ./csv_import_update.py mycsv
     ./csv_import_update.py dir1/dir2/mycsv.csv debug
+    ./csv_import_update.py dir1/dir2/mycsv.csv diff
 
 verbose
     Enables VERBOSE MODE - more messages on screen.
 debug
     Enables DEBUG MODE and VERBOSE MODE - more messages on screen and
+    UPDATE and INSERT queries will not be executed.
+diff
+    Only displays differences betwen the CSV file and the table values.
     UPDATE and INSERT queries will not be executed.
 
 SUPPORTED DATABASES:
