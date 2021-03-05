@@ -33,17 +33,21 @@ import psycopg2                 # PostgreSQL
 
 
 # HELP
-help_string                     = """USAGE: csv_import_update.py [path]<FILENAME>[.csv] [debug|verbose]
+help_string                     = """USAGE: csv_import_update.py [path]<FILENAME>[.csv] [debug|verbose|diff]
 
 EXAMPLE:
     ./csv_import_update.py ./mycsv.csv
     ./csv_import_update.py mycsv
     ./csv_import_update.py dir1/dir2/mycsv.csv debug
+    ./csv_import_update.py dir1/dir2/mycsv.csv diff
 
 verbose
     Enables VERBOSE MODE - more messages on screen.
 debug
     Enables DEBUG MODE and VERBOSE MODE - more messages on screen and
+    UPDATE and INSERT queries will not be executed.
+diff
+    Only displays differences betwen the CSV file and the table values.
     UPDATE and INSERT queries will not be executed.
 
 Quick n dirty CSV importer.
@@ -84,6 +88,7 @@ cursor                          = None
 connection                      = None
 debug_mode                      = False
 verbose_mode                    = False
+diff_mode                       = False
 
 application_issues_list         = {}
 csv_file_issue                  = "csv"
@@ -94,11 +99,25 @@ pp                              = pprint.PrettyPrinter(indent=4)
 
 
 def debug_print(s):
+    if (diff_mode):
+        return
+        
     if (verbose_mode or debug_mode):
         if (s == ""):
             print()
         else:
             print("DEBUG: {0}".format(s))
+
+
+def diff_print(s):
+    if (not diff_mode):
+        return
+    print(s)
+
+
+def regular_print(s):
+    if (not diff_mode):
+        print(s)
 
 
 def add_application_issue(category, issuemsg):
@@ -194,6 +213,8 @@ def read_csv_file(conf, fn):
     with open(fn) as fh:
         reader                  = csv.reader(fh, delimiter=dchar, quotechar=qchar)
         
+        diff_print("\"STATUS\",\"DATABASE_COLUMN\",\"DATABASE_VALUE\",\"LINE\",\"{0}\"".format(os.path.basename(fn)))
+        
         for csvrow in reader:
             rowcnt              = rowcnt + 1
             conf["current_csv_line"] = rowcnt
@@ -257,7 +278,8 @@ def read_csv_file(conf, fn):
                     debug_print(">>>> compare: (db)'{0}' != '{1}'(csv)".format(dbval, csvval))
                     if (dbval != csvval):
                         sql     = get_update_query(conf, csvrow)
-                        print("[{0}] updating: {1}".format(rowcnt, csvrowdict))
+                        regular_print("[{0}] updating: {1}".format(rowcnt, csvrowdict))
+                        diff_print("\"diff\",\"{0}\",\"{1}\",\"{2}\",\"{3}\"".format(colname, dbval, rowcnt, csvrow))
                         updcnt  = updcnt + 1
                         break
             
@@ -267,13 +289,14 @@ def read_csv_file(conf, fn):
                 increment_column_val = singlerow[0] # Single value
                 debug_print("next id: {0}".format(increment_column_val))
                 sql             = get_insert_query(conf, csvrow, increment_column_val)
-                print("[{0}] inserting: {1}".format(rowcnt, csvrowdict))
+                regular_print("[{0}] inserting: {1}".format(rowcnt, csvrowdict))
+                diff_print("\"NEW\",\"\",\"\",\"{0}\",\"{1}\"".format(rowcnt, csvrow))
                 inscnt          = inscnt + 1
             
             
             # If anything to do (values exist and differ)
             debug_print("EXECUTING: {0}".format(sql))
-            if (not debug_mode):
+            if (not debug_mode and not diff_mode):
                 if (sql != ""):
                     cursor.execute(sql)
                     connection.commit()
@@ -286,6 +309,7 @@ def read_csv_file(conf, fn):
     print()
     print()
     print("[SUMMARY] total:{0}, inserts:{1}, updates:{2}, skips:{3}".format(rowcnt, inscnt, updcnt, skipcnt))
+    diff_print("total differences found:{0}".format(inscnt+updcnt))
  
 
 def check_prerequisites():
@@ -300,6 +324,7 @@ def check_prerequisites():
 def get_filenames():
     global debug_mode
     global verbose_mode
+    global diff_mode
     
     fn                          = sys.argv[1]
     conffn                      = "{0}/{1}".format(confpath, os.path.basename(fn))
@@ -314,6 +339,9 @@ def get_filenames():
         
         if (param2 == "verbose"):
             verbose_mode        = True
+        
+        if (param2 == "diff"):
+            diff_mode           = True
     
     if (re.match(r'\/', fn)):
         fn                      = "{0}/{1}".format(csvpath_default, fn)
@@ -556,6 +584,9 @@ try:
         print()
     elif (verbose_mode):
         print("***VERBOSE MODE ENABLED***")
+        print()
+    elif (diff_mode):
+        print("***DIFF MODE ENABLED***")
         print()
     
     print("PARSING: {0}".format(fn))
